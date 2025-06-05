@@ -1,0 +1,56 @@
+# Firebase Authentication 보안 설정 가이드
+
+## 현재 설정된 인증 방법
+- Google OAuth 로그인
+
+## 권장 보안 설정
+
+### 1. Authentication 탭에서 설정할 항목들:
+
+#### Sign-in methods
+- Google 제공업체만 활성화
+- 승인된 도메인에 실제 운영 도메인 추가
+- 테스트용 도메인은 운영 전 제거
+
+#### Settings > User actions
+- Enable create (계정 생성 허용)
+- Enable delete (계정 삭제 허용)
+- 계정 열거 보호 활성화 (Account enumeration protection)
+
+#### Templates
+- 이메일 인증 템플릿 사용자 정의
+- 비밀번호 재설정 템플릿 사용자 정의
+- 이메일 주소 변경 템플릿 사용자 정의
+
+### 2. 보안 강화 설정
+
+#### Password policy (비밀번호 정책)
+- 최소 길이: 8자 이상
+- 대소문자, 숫자, 특수문자 포함 권장
+
+#### Authorized domains (승인된 도메인)
+- localhost (개발용)
+- your-domain.com (운영용)
+- 기타 신뢰할 수 있는 도메인만 추가
+
+#### Quotas and limits
+- 일일 로그인 시도 제한
+- IP별 요청 제한
+- 사용자별 계정 생성 제한
+
+### 3. 모니터링 설정
+- Authentication 로그 모니터링
+- 의심스러운 로그인 활동 알림
+- 다중 계정 생성 모니터링
+
+### 4. 추가 보안 조치
+- 2단계 인증 (선택사항)
+- 세션 타임아웃 설정
+- reCAPTCHA 통합 (봇 방지)
+
+## 운영 전 체크리스트
+[ ] 테스트 계정 제거
+[ ] 운영 도메인만 승인된 도메인에 등록
+[ ] API 키 환경변수 분리
+[ ] 로그 모니터링 설정
+[ ] 보안 규칙 최종 검토 

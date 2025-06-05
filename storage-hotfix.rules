@@ -1,0 +1,56 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // 헬퍼 함수들
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isValidImageFile() {
+      return request.resource == null || (
+        request.resource.contentType != null &&
+        request.resource.contentType.matches('image/.*')
+      );
+    }
+    
+    function isValidFileSize(maxSizeMB) {
+      return request.resource == null || 
+             request.resource.size < maxSizeMB * 1024 * 1024;
+    }
+    
+    // 사진 분석용 이미지 저장 (현재 앱에서 사용하는 경로)
+    match /uploads/{fileName} {
+      allow read, write, delete: if isAuthenticated()
+        && isValidImageFile()
+        && isValidFileSize(15); // 15MB 제한
+    }
+    
+    // 위험성 평가용 이미지 저장 (현재 앱에서 사용하는 경로)
+    match /riskAssessments/{userId}/{fileName} {
+      allow read, write, delete: if isAuthenticated()
+        && isValidImageFile()
+        && isValidFileSize(15);
+    }
+    
+    // 게시판 이미지 저장
+    match /boardImages/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write, delete: if isAuthenticated()
+        && isValidImageFile()
+        && isValidFileSize(10);
+    }
+    
+    // 사용자 프로필 이미지
+    match /profileImages/{userId}/{fileName} {
+      allow read, write, delete: if isAuthenticated()
+        && isValidImageFile()
+        && isValidFileSize(5);
+    }
+    
+    // 임시로 모든 uploads 경로 허용 (앱 안정성 우선)
+    match /{allPaths=**} {
+      allow read, write, delete: if isAuthenticated();
+    }
+  }
+} 

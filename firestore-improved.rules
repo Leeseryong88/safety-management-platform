@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 헬퍼 함수들
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isOwnerOfResource() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    
+    function hasValidTimestamp() {
+      return request.resource.data.createdAt == request.time ||
+             request.resource.data.createdAt is timestamp;
+    }
+    
+    // 사용자 프로필 문서
+    match /users/{userId} {
+      // 본인의 프로필만 읽기/쓰기 가능
+      allow read, write: if isOwner(userId);
+      
+      // 프로필 생성 시 엄격한 필드 검증
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['uid', 'email'])
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.uid is string
+        && request.resource.data.email is string
+        && (request.resource.data.displayName == null || request.resource.data.displayName is string)
+        && (request.resource.data.photoURL == null || request.resource.data.photoURL is string);
+        
+      // 프로필 업데이트 시 uid와 email 변경 방지
+      allow update: if isOwner(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email;
+    }
+    
+    // 사진 분석 문서
+    match /photoAnalyses/{analysisId} {
+      // 본인이 작성한 분석만 읽기/쓰기 가능
+      allow read, write: if isOwnerOfResource();
+      
+      // 새 분석 생성 시 엄격한 필드 검증
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'photoUrl', 'imageFileName', 'createdAt'])
+        && request.resource.data.photoUrl is string
+        && request.resource.data.photoUrl.matches('https://.*')
+        && request.resource.data.imageFileName is string
+        && request.resource.data.imageFileName.size() <= 255
+        && hasValidTimestamp()
+        && (request.resource.data.description == null || 
+            (request.resource.data.description is string && request.resource.data.description.size() <= 1000))
+        && (request.resource.data.result == null || request.resource.data.result is map)
+        && (request.resource.data.error == null || 
+            (request.resource.data.error is string && request.resource.data.error.size() <= 500));
+        
+      // 업데이트 시 userId와 createdAt 변경 방지
+      allow update: if isOwnerOfResource()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+    
+    // 위험성 평가 문서
+    match /riskAssessments/{assessmentId} {
+      // 본인이 작성한 평가만 읽기/쓰기 가능
+      allow read, write: if isOwnerOfResource();
+      
+      // 새 평가 생성 시 엄격한 필드 검증
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'title', 'processName', 'hazards', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.processName is string
+        && request.resource.data.processName.size() > 0
+        && request.resource.data.processName.size() <= 200
+        && request.resource.data.hazards is list
+        && request.resource.data.hazards.size() >= 0
+        && request.resource.data.hazards.size() <= 100
+        && hasValidTimestamp()
+        && (request.resource.data.photos == null || request.resource.data.photos is list)
+        && (request.resource.data.adminComment == null || 
+            (request.resource.data.adminComment is string && request.resource.data.adminComment.size() <= 2000));
+        
+      // 업데이트 시 userId와 createdAt 변경 방지
+      allow update: if isOwnerOfResource()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+    
+    // 게시판 문서
+    match /boardPosts/{postId} {
+      // 모든 인증된 사용자가 게시물 읽기 가능
+      allow read: if isAuthenticated();
+      
+      // 본인이 작성한 게시물만 수정/삭제 가능
+      allow update, delete: if isOwnerOfResource();
+      
+      // 새 게시물 생성 시 엄격한 필드 검증
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'userName', 'category', 'title', 'content', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 300
+        && request.resource.data.content is string
+        && request.resource.data.content.size() > 0
+        && request.resource.data.content.size() <= 50000
+        && request.resource.data.category in ['safetyInfo', 'jobPostings']
+        && request.resource.data.userName is string
+        && request.resource.data.userName.size() <= 100
+        && hasValidTimestamp();
+        
+      // 게시물 수정 시 작성자 정보 및 생성일 변경 방지
+      allow update: if isOwnerOfResource()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.userName == resource.data.userName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.category == resource.data.category;
+    }
+    
+    // AI 챗봇 메시지 (필요시 추가)
+    match /chatMessages/{messageId} {
+      // 본인의 채팅 메시지만 읽기/쓰기 가능
+      allow read, write: if isOwnerOfResource();
+      
+      // 새 메시지 생성 시 엄격한 필드 검증
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'message', 'timestamp'])
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 5000
+        && request.resource.data.timestamp is timestamp;
+    }
+    
+    // 시스템 설정 (관리자만 접근)
+    match /systemConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // 관리자 권한 추가 시 수정
+    }
+    
+    // 기본적으로 모든 접근 거부
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

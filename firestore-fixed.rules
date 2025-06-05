@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 사용자 프로필 문서
+    match /users/{userId} {
+      // 본인의 프로필만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // 프로필 생성 시 필수 필드 검증
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['uid', 'email'])
+        && request.resource.data.uid == userId;
+    }
+    
+    // 사진 분석 문서 (인덱스 문제 해결)
+    match /photoAnalyses/{analysisId} {
+      // 본인이 작성한 분석만 읽기/쓰기/삭제 가능
+      allow read, write, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 분석 생성 시 필수 필드 검증 (더 유연하게)
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAny(['userId', 'photoUrl', 'imageFileName'])
+        && request.resource.data.userId is string;
+    }
+    
+    // 위험성 평가 문서 (인덱스 문제 해결)
+    match /riskAssessments/{assessmentId} {
+      // 본인이 작성한 평가만 읽기/쓰기/삭제 가능
+      allow read, write, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 평가 생성 시 필수 필드 검증 (더 유연하게)
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAny(['userId', 'title', 'processName'])
+        && request.resource.data.userId is string;
+    }
+    
+    // 게시판 문서
+    match /boardPosts/{postId} {
+      // 모든 인증된 사용자가 게시물 읽기 가능
+      allow read: if request.auth != null;
+      
+      // 본인이 작성한 게시물만 수정/삭제 가능
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 게시물 생성 시 필수 필드 검증
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAny(['userId', 'title', 'content'])
+        && request.resource.data.userId is string;
+    }
+    
+    // 채팅 메시지 (AI QA 페이지용)
+    match /chatMessages/{messageId} {
+      // 본인의 채팅 메시지만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 메시지 생성 시 필수 필드 검증
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAny(['userId', 'message'])
+        && request.resource.data.userId is string;
+    }
+    
+    // 임시로 모든 인증된 사용자에게 읽기 허용 (디버깅용)
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+} 

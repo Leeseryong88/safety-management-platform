@@ -1,0 +1,9 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 임시로 모든 접근 허용 (CORS 문제 해결용)
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+} 

@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 헬퍼 함수들
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isOwnerOfResource() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    
+    // 사용자 프로필 문서
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['uid', 'email'])
+        && request.resource.data.uid == userId;
+    }
+    
+    // 사진 분석 문서 (매우 완화된 규칙)
+    match /photoAnalyses/{analysisId} {
+      allow read, write: if isOwnerOfResource();
+      
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // 위험성 평가 문서 (완화된 규칙)
+    match /riskAssessments/{assessmentId} {
+      allow read, write: if isOwnerOfResource();
+      
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'title', 'processName', 'hazards', 'createdAt']);
+    }
+    
+    // 게시판 문서 (완화된 규칙)
+    match /boardPosts/{postId} {
+      allow read: if isAuthenticated();
+      allow update, delete: if isOwnerOfResource();
+      
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'userName', 'category', 'title', 'content', 'createdAt']);
+    }
+    
+    // AI 챗봇 메시지 (필요시)
+    match /chatMessages/{messageId} {
+      allow read, write: if isOwnerOfResource();
+      
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // 기본적으로 모든 접근 거부
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

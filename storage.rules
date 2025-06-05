@@ -1,0 +1,75 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 사진 분석용 이미지 저장 (경로 수정)
+    match /photoAnalyses/{userId}/{fileName} {
+      // 본인만 업로드/읽기/삭제 가능
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 파일 크기 제한 (10MB) - 조건 완화
+      allow write: if request.auth != null 
+        && request.auth.uid == userId
+        && (request.resource == null || request.resource.size < 10 * 1024 * 1024)
+        && (request.resource == null || request.resource.contentType.matches('image/.*'));
+    }
+    
+    // 사진 분석용 대체 경로 (앱에서 실제 사용하는 경로)
+    match /photoAnalyses/{allPaths=**} {
+      allow read, write, delete: if request.auth != null;
+    }
+    
+    // 위험성 평가용 이미지 저장
+    match /riskAssessments/{userId}/{fileName} {
+      // 본인만 업로드/읽기/삭제 가능
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 파일 크기 제한 (10MB) - 조건 완화
+      allow write: if request.auth != null 
+        && request.auth.uid == userId
+        && (request.resource == null || request.resource.size < 10 * 1024 * 1024)
+        && (request.resource == null || request.resource.contentType.matches('image/.*'));
+    }
+    
+    // 위험성 평가용 대체 경로
+    match /riskAssessments/{allPaths=**} {
+      allow read, write, delete: if request.auth != null;
+    }
+    
+    // 게시판 이미지 저장
+    match /boardImages/{userId}/{fileName} {
+      // 본인만 업로드/삭제 가능, 모든 인증된 사용자가 읽기 가능
+      allow read: if request.auth != null;
+      allow write, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 파일 크기 제한 (5MB) - 조건 완화
+      allow write: if request.auth != null 
+        && request.auth.uid == userId
+        && (request.resource == null || request.resource.size < 5 * 1024 * 1024)
+        && (request.resource == null || request.resource.contentType.matches('image/.*'));
+    }
+    
+    // 게시판 이미지 대체 경로
+    match /boardImages/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write, delete: if request.auth != null;
+    }
+    
+    // 사용자 프로필 이미지
+    match /profileImages/{userId}/{fileName} {
+      // 본인만 업로드/읽기/삭제 가능
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 파일 크기 제한 (2MB) - 조건 완화
+      allow write: if request.auth != null 
+        && request.auth.uid == userId
+        && (request.resource == null || request.resource.size < 2 * 1024 * 1024)
+        && (request.resource == null || request.resource.contentType.matches('image/.*'));
+    }
+    
+    // 임시로 모든 인증된 사용자에게 읽기/쓰기 허용 (디버깅용)
+    // 운영 시에는 제거하세요
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+} 

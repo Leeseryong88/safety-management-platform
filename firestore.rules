@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 사용자 프로필 문서
+    match /users/{userId} {
+      // 본인의 프로필만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // 프로필 생성 시 필수 필드 검증
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['uid', 'email'])
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email;
+    }
+    
+    // 사진 분석 문서
+    match /photoAnalyses/{analysisId} {
+      // 본인이 작성한 분석만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 분석 생성 시 필수 필드 검증
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'photoUrl', 'imageFileName', 'createdAt'])
+        && request.resource.data.photoUrl is string
+        && request.resource.data.imageFileName is string;
+    }
+    
+    // 위험성 평가 문서
+    match /riskAssessments/{assessmentId} {
+      // 본인이 작성한 평가만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 평가 생성 시 필수 필드 검증
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'title', 'processName', 'hazards', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.processName is string
+        && request.resource.data.hazards is list;
+    }
+    
+    // 게시판 문서
+    match /boardPosts/{postId} {
+      // 모든 사용자가 게시물 읽기 가능 (비로그인 포함)
+      allow read: if true;
+      
+      // 본인이 작성한 게시물만 삭제 가능
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 게시물 생성 시 필수 필드 검증 (로그인 필요)
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'userName', 'category', 'title', 'content', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.content is string
+        && request.resource.data.category in ['safetyInfo', 'jobPostings'];
+        
+      // 게시물 수정 시 작성자 정보 변경 방지 및 본인만 수정 가능
+      allow update: if request.auth != null 
+        && request.auth.uid == resource.data.userId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.userName == resource.data.userName;
+    }
+    
+    // 게시판 댓글
+    match /boardComments/{commentId} {
+      // 모든 사용자가 댓글 읽기 가능 (비로그인 포함)
+      allow read: if true;
+      
+      // 본인이 작성한 댓글만 삭제 가능
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 댓글 생성 시 필수 필드 검증 (로그인 필요)
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['postId', 'userId', 'userName', 'content', 'createdAt'])
+        && request.resource.data.postId is string
+        && request.resource.data.content is string
+        && request.resource.data.content.size() > 0
+        && request.resource.data.content.size() <= 1000;
+        
+      // 댓글 수정 시 작성자 정보와 게시물 ID 변경 방지 및 본인만 수정 가능
+      allow update: if request.auth != null 
+        && request.auth.uid == resource.data.userId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.userName == resource.data.userName
+        && request.resource.data.postId == resource.data.postId;
+    }
+    
+    // 채팅 메시지 (AI QA 페이지용)
+    match /chatMessages/{messageId} {
+      // 본인의 채팅 메시지만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 새 메시지 생성 시 필수 필드 검증
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'message', 'timestamp'])
+        && request.resource.data.message is string;
+    }
+    
+    // 기본적으로 모든 접근 거부
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

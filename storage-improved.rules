@@ -1,0 +1,83 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // 헬퍼 함수들
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isValidImageFile() {
+      return request.resource != null &&
+             request.resource.contentType != null &&
+             request.resource.contentType.matches('image/(jpeg|jpg|png|gif|webp)');
+    }
+    
+    function isValidFileSize(maxSizeMB) {
+      return request.resource == null || 
+             request.resource.size < maxSizeMB * 1024 * 1024;
+    }
+    
+    function belongsToUser(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 사진 분석용 이미지 저장
+    match /uploads/{fileName} {
+      // 모든 인증된 사용자가 업로드 가능 (timestamps 포함된 파일명)
+      allow read, write: if isAuthenticated()
+        && isValidImageFile()
+        && isValidFileSize(10); // 10MB 제한
+      
+      // 삭제는 파일 업로더만 가능 (타임스탬프로 구분)
+      allow delete: if isAuthenticated();
+    }
+    
+    // 사진 분석용 사용자별 폴더
+    match /photoAnalyses/{userId}/{fileName} {
+      allow read, write, delete: if belongsToUser(userId)
+        && isValidImageFile()
+        && isValidFileSize(10);
+    }
+    
+    // 위험성 평가용 이미지 저장
+    match /riskAssessments/{userId}/{fileName} {
+      allow read, write, delete: if belongsToUser(userId)
+        && isValidImageFile()
+        && isValidFileSize(15); // 15MB 제한 (복수 이미지 고려)
+    }
+    
+    // 게시판 이미지 저장
+    match /boardImages/{userId}/{fileName} {
+      // 본인만 업로드/삭제 가능, 모든 인증된 사용자가 읽기 가능
+      allow read: if isAuthenticated();
+      allow write, delete: if belongsToUser(userId)
+        && isValidImageFile()
+        && isValidFileSize(5); // 5MB 제한
+    }
+    
+    // 사용자 프로필 이미지
+    match /profileImages/{userId}/{fileName} {
+      allow read, write, delete: if belongsToUser(userId)
+        && isValidImageFile()
+        && isValidFileSize(2); // 2MB 제한
+    }
+    
+    // 임시 파일 정리용 (선택사항)
+    match /temp/{userId}/{fileName} {
+      allow read, write, delete: if belongsToUser(userId)
+        && isValidImageFile()
+        && isValidFileSize(20);
+    }
+    
+    // 백업 및 로그 파일 (시스템용)
+    match /system/{allPaths=**} {
+      allow read, write: if false; // 관리자 권한 추가 시 수정
+    }
+    
+    // 기본적으로 모든 접근 거부
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+} 
