@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Layout, { AuthProvider } from './components/Layout'; // Ensured relative path
 import HomePage from './pages/HomePage'; // Ensured relative path
 import PhotoAnalysisPage from './pages/PhotoAnalysisPage'; // Ensured relative path
@@ -31,6 +32,7 @@ const App: React.FC = () => {
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
+      <Analytics />
     </AuthProvider>
   );
 };
