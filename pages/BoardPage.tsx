@@ -145,9 +145,46 @@ const BoardPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, fetchPosts]);
 
+  // Quill 인스턴스 정리 함수
+  const cleanupQuillInstance = useCallback(() => {
+    if (quillInstanceRef.current) {
+      // Quill 인스턴스 정리
+      try {
+        quillInstanceRef.current.root.innerHTML = '';
+      } catch (error) {
+        console.warn('Error cleaning Quill content:', error);
+      }
+      quillInstanceRef.current = null;
+    }
+  }, []);
+
+  // Quill 에디터 초기화
   useEffect(() => {
-    if (showForm && quillEditorRef.current && currentUser) { // Only init Quill if user is logged in and form is shown
-      if (!quillInstanceRef.current) { 
+    // 폼이 숨겨질 때 Quill 인스턴스 정리
+    if (!showForm) {
+      cleanupQuillInstance();
+      return;
+    }
+
+    // 사용자가 로그인하지 않았으면 폼 숨기기
+    if (!currentUser) {
+      setShowForm(false);
+      alert("게시물 작성 및 수정은 로그인이 필요합니다.");
+      return;
+    }
+
+    // DOM 요소가 준비될 때까지 약간의 지연
+    const initializeQuill = () => {
+      if (!quillEditorRef.current) {
+        console.warn("Quill editor ref not ready, retrying...");
+        setTimeout(initializeQuill, 100);
+        return;
+      }
+
+      // 기존 인스턴스가 있다면 정리
+      cleanupQuillInstance();
+      
+      try {
         const quill = new Quill(quillEditorRef.current, {
           theme: 'snow',
           modules: {
@@ -162,50 +199,73 @@ const BoardPage: React.FC = () => {
           placeholder: '내용을 입력하세요...',
         });
 
+        // 이미지 업로드 핸들러
         const toolbar = quill.getModule('toolbar') as any; 
-        if (toolbar && currentUser) { // Ensure currentUser for image uploads
-            toolbar.addHandler('image', () => {
+        if (toolbar) {
+          toolbar.addHandler('image', () => {
             const input = document.createElement('input');
             input.setAttribute('type', 'file');
             input.setAttribute('accept', 'image/*');
             input.click();
 
             input.onchange = async () => {
-                const file = input.files?.[0];
-                if (file && quillInstanceRef.current && currentUser) { 
+              const file = input.files?.[0];
+              if (file && quillInstanceRef.current && currentUser) { 
                 setIsSubmitting(true);
                 setError(null);
                 try {
-                    const storageRefPath = `boardImages/${currentUser.uid}/${Date.now()}_${file.name}`;
-                    const imageRef = ref(storage, storageRefPath);
-                    await uploadBytes(imageRef, file);
-                    const downloadURL = await getDownloadURL(imageRef);
-                    
-                    const range = quillInstanceRef.current.getSelection(true);
-                    quillInstanceRef.current.insertEmbed(range.index, 'image', downloadURL);
-                    quillInstanceRef.current.setSelection(range.index + 1, 0);
+                  const storageRefPath = `boardImages/${currentUser.uid}/${Date.now()}_${file.name}`;
+                  const imageRef = ref(storage, storageRefPath);
+                  await uploadBytes(imageRef, file);
+                  const downloadURL = await getDownloadURL(imageRef);
+                  
+                  const range = quillInstanceRef.current.getSelection(true);
+                  quillInstanceRef.current.insertEmbed(range.index, 'image', downloadURL);
+                  quillInstanceRef.current.setSelection(range.index + 1, 0);
                 } catch (uploadError: any) {
-                    console.error("Error uploading image to board:", uploadError);
-                    setError("이미지 업로드에 실패했습니다: " + uploadError.message);
+                  console.error("Error uploading image to board:", uploadError);
+                  setError("이미지 업로드에 실패했습니다: " + uploadError.message);
                 } finally {
-                    setIsSubmitting(false);
+                  setIsSubmitting(false);
                 }
-                }
+              }
             };
-            });
+          });
         }
+
         quillInstanceRef.current = quill;
+
+        // 편집 모드일 때 기존 내용 설정
+        if (isEditing && currentPostForForm.content) {
+          quill.root.innerHTML = currentPostForForm.content;
+        } else {
+          quill.root.innerHTML = ''; 
+        }
+
+        console.log("Quill editor initialized successfully");
+      } catch (error) {
+        console.error("Failed to initialize Quill editor:", error);
+        setError("에디터 초기화에 실패했습니다. 페이지를 새로고침해주세요.");
       }
+    };
+
+    // 다음 틱에서 초기화 (DOM 업데이트 완료 후)
+    setTimeout(initializeQuill, 0);
+
+    // 컴포넌트 언마운트 시 정리
+    return cleanupQuillInstance;
+  }, [showForm, currentUser, cleanupQuillInstance]);
+
+  // 편집 모드 변경 시 내용 업데이트 (별도 useEffect로 분리)
+  useEffect(() => {
+    if (quillInstanceRef.current && showForm) {
       if (isEditing && currentPostForForm.content) {
         quillInstanceRef.current.root.innerHTML = currentPostForForm.content;
-      } else {
-        quillInstanceRef.current.root.innerHTML = ''; 
+      } else if (!isEditing) {
+        quillInstanceRef.current.root.innerHTML = '';
       }
-    } else if (showForm && !currentUser) { // If form is attempted to be shown but user not logged in
-        setShowForm(false); // Hide form
-        alert("게시물 작성 및 수정은 로그인이 필요합니다.");
     }
-  }, [showForm, isEditing, currentPostForForm.content, currentUser]);
+  }, [isEditing, currentPostForForm.content, showForm]);
 
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,9 +277,7 @@ const BoardPage: React.FC = () => {
     setCurrentPostForForm({});
     setIsEditing(false);
     setError(null);
-    if (quillInstanceRef.current) {
-      quillInstanceRef.current.root.innerHTML = '';
-    }
+    // Quill 인스턴스는 useEffect에서 자동으로 정리됨
   };
   
   const handleSubmitPost = async (e: React.FormEvent) => {
