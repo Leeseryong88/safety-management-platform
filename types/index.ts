@@ -44,7 +44,7 @@ export interface RiskAssessment {
   adminComment: string;
 }
 
-export type BoardCategory = 'safetyInfo' | 'jobPostings';
+export type BoardCategory = 'safetyInfo' | 'freeBoard';
 
 export interface BoardPost {
   id?: string;
