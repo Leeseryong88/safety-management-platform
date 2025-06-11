@@ -215,6 +215,130 @@ const BoardPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, fetchPosts]);
 
+  // 이미지 정렬 컨텍스트 메뉴 생성
+  const createImageContextMenu = useCallback((img: HTMLImageElement) => {
+    // 기존 메뉴 제거
+    const existingMenu = document.querySelector('.image-context-menu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+
+    const menu = document.createElement('div');
+    menu.className = 'image-context-menu';
+    menu.style.cssText = `
+      position: fixed;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      padding: 8px 0;
+      min-width: 120px;
+      font-size: 14px;
+    `;
+
+    const menuItems = [
+      { label: '왼쪽 정렬', action: () => setImageAlignment(img, 'left') },
+      { label: '가운데 정렬', action: () => setImageAlignment(img, 'center') },
+      { label: '오른쪽 정렬', action: () => setImageAlignment(img, 'right') },
+      { label: '인라인 배치', action: () => setImageAlignment(img, 'inline') },
+      { label: '구분선', action: null },
+      { label: '원본 크기', action: () => resetImageSize(img) },
+      { label: '삭제', action: () => removeImage(img) }
+    ];
+
+    menuItems.forEach(item => {
+      if (item.label === '구분선') {
+        const separator = document.createElement('div');
+        separator.style.cssText = 'height: 1px; background: #eee; margin: 4px 0;';
+        menu.appendChild(separator);
+        return;
+      }
+
+      const menuItem = document.createElement('div');
+      menuItem.textContent = item.label;
+      menuItem.style.cssText = `
+        padding: 8px 16px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      `;
+      
+      menuItem.addEventListener('mouseenter', () => {
+        menuItem.style.backgroundColor = '#f5f5f5';
+      });
+      
+      menuItem.addEventListener('mouseleave', () => {
+        menuItem.style.backgroundColor = 'transparent';
+      });
+      
+      menuItem.addEventListener('click', () => {
+        if (item.action) {
+          item.action();
+        }
+        menu.remove();
+      });
+      
+      menu.appendChild(menuItem);
+    });
+
+    return menu;
+  }, []);
+
+  // 이미지 정렬 설정
+  const setImageAlignment = useCallback((img: HTMLImageElement, alignment: string) => {
+    // 기존 정렬 클래스 제거
+    img.classList.remove('align-left', 'align-center', 'align-right', 'align-inline');
+    
+    // 새 정렬 클래스 추가
+    img.classList.add(`align-${alignment}`);
+    
+    // 스타일 적용
+    switch (alignment) {
+      case 'left':
+        img.style.display = 'block';
+        img.style.marginLeft = '0';
+        img.style.marginRight = 'auto';
+        img.style.float = 'none';
+        break;
+      case 'center':
+        img.style.display = 'block';
+        img.style.marginLeft = 'auto';
+        img.style.marginRight = 'auto';
+        img.style.float = 'none';
+        break;
+      case 'right':
+        img.style.display = 'block';
+        img.style.marginLeft = 'auto';
+        img.style.marginRight = '0';
+        img.style.float = 'none';
+        break;
+      case 'inline':
+        img.style.display = 'inline-block';
+        img.style.marginLeft = '5px';
+        img.style.marginRight = '5px';
+        img.style.float = 'none';
+        img.style.verticalAlign = 'top';
+        break;
+    }
+    
+    console.log(`Image aligned to: ${alignment}`);
+  }, []);
+
+  // 이미지 크기 초기화
+  const resetImageSize = useCallback((img: HTMLImageElement) => {
+    img.style.width = '300px';
+    img.style.height = 'auto';
+    console.log('Image size reset to original');
+  }, []);
+
+  // 이미지 삭제
+  const removeImage = useCallback((img: HTMLImageElement) => {
+    if (confirm('이미지를 삭제하시겠습니까?')) {
+      img.remove();
+      console.log('Image removed');
+    }
+  }, []);
+
   // 커스텀 이미지 리사이징 기능
   const addImageResizeHandlers = useCallback((img: HTMLImageElement) => {
     console.log('Adding resize handlers to image:', img.src);
@@ -236,7 +360,7 @@ const BoardPage: React.FC = () => {
       isHovering = true;
       img.style.outline = '2px dashed #007bff';
       img.style.cursor = 'se-resize';
-      img.title = '드래그하여 크기 조절 (우하단에서 시작)';
+      img.title = '우클릭: 정렬 메뉴 | 우하단 드래그: 크기 조절';
     };
 
     const hideResize = () => {
@@ -251,6 +375,24 @@ const BoardPage: React.FC = () => {
     // 이미지에 호버 이벤트 추가
     img.addEventListener('mouseenter', showResize);
     img.addEventListener('mouseleave', hideResize);
+
+    // 우클릭 컨텍스트 메뉴
+    img.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const menu = createImageContextMenu(img);
+      menu.style.left = e.clientX + 'px';
+      menu.style.top = e.clientY + 'px';
+      document.body.appendChild(menu);
+      
+      // 메뉴 외부 클릭 시 닫기
+      const closeMenu = (event: MouseEvent) => {
+        if (!menu.contains(event.target as Node)) {
+          menu.remove();
+          document.removeEventListener('click', closeMenu);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    });
 
     // 리사이징 기능
     let startX = 0;
@@ -320,13 +462,11 @@ const BoardPage: React.FC = () => {
     // 더블클릭으로 원본 크기 복원
     img.addEventListener('dblclick', (e) => {
       e.preventDefault();
-      img.style.width = '400px';
-      img.style.height = 'auto';
-      console.log('Reset to original size');
+      resetImageSize(img);
     });
 
     console.log('Image resize handlers added successfully');
-  }, []);
+  }, [createImageContextMenu, setImageAlignment, resetImageSize, removeImage]);
 
   // Quill 인스턴스 정리 함수
   const cleanupQuillInstance = useCallback(() => {
@@ -418,13 +558,14 @@ const BoardPage: React.FC = () => {
                       if (lastImage) {
                         console.log('Last image src:', lastImage.src);
                         
-                        // 기본 스타일 적용
-                        lastImage.style.width = '400px';
+                        // 기본 스타일 적용 (인라인 배치)
+                        lastImage.style.width = '300px';
                         lastImage.style.height = 'auto';
-                        lastImage.style.display = 'block';
-                        lastImage.style.marginLeft = 'auto';
-                        lastImage.style.marginRight = 'auto';
+                        lastImage.style.display = 'inline-block';
+                        lastImage.style.margin = '5px';
                         lastImage.style.maxWidth = '100%';
+                        lastImage.style.verticalAlign = 'top';
+                        lastImage.className = 'editable-image align-center';
                         
                         // 이미지 로드 완료 후 리사이징 기능 추가
                         if (lastImage.complete) {
@@ -464,6 +605,41 @@ const BoardPage: React.FC = () => {
           quill.root.innerHTML = ''; 
         }
 
+        // 이미지 정렬을 위한 CSS 스타일 추가
+        const style = document.createElement('style');
+        style.textContent = `
+          .ql-editor .editable-image {
+            max-width: 100%;
+            height: auto;
+            cursor: pointer;
+          }
+          .ql-editor .editable-image.align-left {
+            display: block;
+            margin-left: 0;
+            margin-right: auto;
+          }
+          .ql-editor .editable-image.align-center {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+          }
+          .ql-editor .editable-image.align-right {
+            display: block;
+            margin-left: auto;
+            margin-right: 0;
+          }
+          .ql-editor .editable-image.align-inline {
+            display: inline-block;
+            margin: 5px;
+            vertical-align: top;
+          }
+        `;
+        
+        if (!document.querySelector('#image-alignment-styles')) {
+          style.id = 'image-alignment-styles';
+          document.head.appendChild(style);
+        }
+
         console.log("Quill editor initialized successfully");
       } catch (error) {
         console.error("Failed to initialize Quill editor:", error);
@@ -490,6 +666,15 @@ const BoardPage: React.FC = () => {
           
           images.forEach((img, index) => {
             const htmlImg = img as HTMLImageElement;
+            
+            // 기존 이미지를 인라인으로 설정
+            if (!htmlImg.className.includes('editable-image')) {
+              htmlImg.style.display = 'inline-block';
+              htmlImg.style.margin = '5px';
+              htmlImg.style.verticalAlign = 'top';
+              htmlImg.className = 'editable-image align-inline';
+            }
+            
             if (htmlImg.complete) {
               console.log(`Adding resize handlers to existing image ${index + 1}`);
               addImageResizeHandlers(htmlImg);
